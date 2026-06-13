@@ -180,7 +180,7 @@ export class Game {
     const ctx = this.ctx;
     const { width: w, height: h } = ctx.canvas;
 
-    ctx.fillStyle = '#1a4d7a';
+    ctx.fillStyle = '#2e6da6';
     ctx.fillRect(0, 0, w, h);
 
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
@@ -224,6 +224,7 @@ export class Game {
     ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
     ctx.font = '17px system-ui, sans-serif';
     ctx.fillText('Press 1, 2 or 3 to set sail — the enemy ship is chosen at random', w / 2, h * 0.82);
+    ctx.fillText('Press left or right arrows to control the ship - press spacebar to fire', w / 2, h * 0.82 + 28);
   }
 
   private drawHealthRow(label: string, ship: Ship, row: number) {
