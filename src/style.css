@@ -1,10 +1,185 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 html,
 body {
   margin: 0;
   height: 100%;
   overflow: hidden;
+  font-family: system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
 }
 
 canvas {
   display: block;
+}
+
+/* ── Overlays ─────────────────────────────────────────────────────────────── */
+
+#menu-overlay,
+#gameover-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#menu-overlay {
+  background-image: url('/background.jpg');
+  background-size: cover;
+  background-position: center;
+  /* fallback when image not yet provided — lets the canvas ocean show through */
+  background-color: rgba(0, 0, 0, 0.35);
+}
+
+#gameover-overlay {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ── Selection modal ──────────────────────────────────────────────────────── */
+
+.modal {
+  background: rgba(10, 30, 55, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  padding: 28px 32px 24px;
+  max-width: 860px;
+  width: calc(100% - 32px);
+  color: #fff;
+  text-align: center;
+}
+
+.modal h1 {
+  margin: 0 0 20px;
+  font-size: clamp(22px, 4vw, 36px);
+  letter-spacing: 0.02em;
+}
+
+.section-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 16px 0 8px;
+}
+
+.card-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.07);
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  min-width: 100px;
+  min-height: 44px;
+  transition: background 0.12s, border-color 0.12s;
+  color: #fff;
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.35;
+}
+
+.card:active,
+.card.selected {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: #fff;
+}
+
+.card .card-name {
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 3px;
+}
+
+.card .card-stat {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+#set-sail {
+  margin-top: 22px;
+  padding: 14px 40px;
+  font-size: 18px;
+  font-weight: 700;
+  font-family: inherit;
+  background: #c8860a;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  min-height: 52px;
+  transition: background 0.12s;
+}
+
+#set-sail:active {
+  background: #a06c07;
+}
+
+.hint {
+  margin-top: 12px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* ── Game-over panel ──────────────────────────────────────────────────────── */
+
+.gameover-panel {
+  text-align: center;
+  color: #fff;
+}
+
+#gameover-title {
+  font-size: clamp(24px, 5vw, 44px);
+  font-weight: 700;
+  margin-bottom: 28px;
+}
+
+.gameover-buttons {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.gameover-buttons button {
+  padding: 14px 32px;
+  font-size: 17px;
+  font-weight: 700;
+  font-family: inherit;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  min-height: 52px;
+  min-width: 140px;
+  transition: filter 0.12s;
+}
+
+.gameover-buttons button:active {
+  filter: brightness(0.85);
+}
+
+#btn-replay {
+  background: #2e7d32;
+  color: #fff;
+}
+
+#btn-harder {
+  background: #b71c1c;
+  color: #fff;
 }

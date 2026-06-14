@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
     <title>Pirates: Naval Combat</title>
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-6PX28XX4W9"></script>
@@ -16,6 +16,37 @@
   </head>
   <body>
     <canvas id="game"></canvas>
+
+    <!-- Full-screen selection modal shown before the battle starts -->
+    <div id="menu-overlay">
+      <div class="modal">
+        <h1>Pirates: Naval Combat</h1>
+
+        <div class="section-label">Your ship</div>
+        <div class="card-row" id="player-cards"></div>
+
+        <div class="section-label">Enemy ship</div>
+        <div class="card-row" id="enemy-cards"></div>
+
+        <div class="section-label">Difficulty</div>
+        <div class="card-row" id="difficulty-cards"></div>
+
+        <button id="set-sail">⚓ Set Sail</button>
+        <div class="hint">← → or A D to steer &nbsp;·&nbsp; Space to fire</div>
+      </div>
+    </div>
+
+    <!-- Shown when the battle ends -->
+    <div id="gameover-overlay" class="hidden">
+      <div class="gameover-panel">
+        <div id="gameover-title"></div>
+        <div class="gameover-buttons">
+          <button id="btn-replay">Play Again</button>
+          <button id="btn-harder" class="hidden">Play on <span id="harder-label"></span></button>
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -5,45 +5,24 @@ import type { Input } from './input';
 import { Ship, SHIP_TYPES, type ShipTypeName, type Turn } from './ship';
 import { Wind } from './wind';
 
-const MAX_DT = 0.05; // s; clamp so tab-switch pauses don't teleport ships
-const WAVE_DRIFT = 14; // px/s; background waves ride the wind
-const PLAYER_RELOAD = 1.4; // s between broadsides
+const MAX_DT = 0.05;
+const WAVE_DRIFT = 14;
+const PLAYER_RELOAD = 1.4;
 
-// Difficulty changes the enemy captain's skill, never damage numbers.
-const DIFFICULTIES = {
+export const DIFFICULTIES = {
   easy: { label: 'Easy', reload: 2.2, leadShots: false, windAware: false },
   medium: { label: 'Medium', reload: 1.8, leadShots: true, windAware: false },
   hard: { label: 'Hard', reload: 1.4, leadShots: true, windAware: true },
 } as const;
 
-type DifficultyName = keyof typeof DIFFICULTIES;
-
-const DIFFICULTY_KEYS: Record<string, DifficultyName> = {
-  Digit1: 'easy',
-  Digit2: 'medium',
-  Digit3: 'hard',
-};
-
-const DIFFICULTY_BLURBS: Record<DifficultyName, string> = {
-  easy: 'slow reload · aims at where you are',
-  medium: 'quicker reload · leads your movement',
-  hard: 'reloads as fast as you · leads shots · sails the wind',
-};
+export type DifficultyName = keyof typeof DIFFICULTIES;
 
 const PLAYER_COLOR = '#8b5a2b';
 const ENEMY_COLOR = '#7a1f1f';
 
-const SELECT_KEYS: Record<string, ShipTypeName> = {
-  Digit1: 'small',
-  Digit2: 'medium',
-  Digit3: 'large',
-};
-
-const SPEED_LABELS: Record<ShipTypeName, string> = {
-  small: 'fast',
-  medium: 'steady',
-  large: 'slow',
-};
+// Touch button dimensions — large enough for thumbs.
+const BTN_SIZE = 72;
+const BTN_MARGIN = 24;
 
 interface Wave {
   x: number;
@@ -51,12 +30,17 @@ interface Wave {
   r: number;
 }
 
+interface BtnRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export class Game {
   private ctx: CanvasRenderingContext2D;
   private input: Input;
-  private phase: 'select' | 'enemySelect' | 'difficultySelect' | 'battle' = 'select';
-  private pendingPlayerType: ShipTypeName = 'small';
-  private pendingEnemyType: ShipTypeName | 'random' = 'random';
+  private phase: 'idle' | 'battle' = 'idle';
   private difficulty: DifficultyName = 'easy';
   private player!: Ship;
   private enemy!: Ship;
@@ -65,12 +49,23 @@ export class Game {
   private waves: Wave[] = [];
   private wind = new Wind();
   private lastTime = 0;
+  private gameOverFired = false;
+
+  /** Set by main.ts; called once when the battle ends (won = enemy sunk). */
+  onGameOver: ((won: boolean) => void) | null = null;
+
+  private readonly isTouchDevice = navigator.maxTouchPoints > 0;
+  private btnLeft!: BtnRect;
+  private btnRight!: BtnRect;
+  private btnFire!: BtnRect;
 
   constructor(ctx: CanvasRenderingContext2D, input: Input) {
     this.ctx = ctx;
     this.input = input;
 
     const { width: w, height: h } = ctx.canvas;
+    this.updateBtnRects(w, h);
+
     for (let i = 0; i < 40; i++) {
       this.waves.push({
         x: Math.random() * w,
@@ -78,31 +73,77 @@ export class Game {
         r: 6 + Math.random() * 10,
       });
     }
+
+    if (this.isTouchDevice) {
+      ctx.canvas.addEventListener('touchstart', this.onTouch, { passive: true });
+      ctx.canvas.addEventListener('touchmove', this.onTouch, { passive: true });
+      ctx.canvas.addEventListener('touchend', this.onTouch, { passive: true });
+      ctx.canvas.addEventListener('touchcancel', this.onTouch, { passive: true });
+    }
   }
 
-  private startBattle() {
+  private updateBtnRects(w: number, h: number) {
+    const by = h - BTN_MARGIN - BTN_SIZE;
+    this.btnLeft = { x: BTN_MARGIN, y: by, w: BTN_SIZE, h: BTN_SIZE };
+    this.btnRight = { x: w - BTN_MARGIN - BTN_SIZE, y: by, w: BTN_SIZE, h: BTN_SIZE };
+    this.btnFire = { x: w / 2 - BTN_SIZE / 2, y: by, w: BTN_SIZE, h: BTN_SIZE };
+  }
+
+  private hitBtn(btn: BtnRect, tx: number, ty: number): boolean {
+    return tx >= btn.x && tx <= btn.x + btn.w && ty >= btn.y && ty <= btn.y + btn.h;
+  }
+
+  private onTouch = (e: TouchEvent) => {
+    if (this.phase !== 'battle') return;
+    const rect = this.ctx.canvas.getBoundingClientRect();
+    const scaleX = this.ctx.canvas.width / rect.width;
+    const scaleY = this.ctx.canvas.height / rect.height;
+    let left = false;
+    let right = false;
+    let fire = false;
+    for (const t of Array.from(e.touches)) {
+      const tx = (t.clientX - rect.left) * scaleX;
+      const ty = (t.clientY - rect.top) * scaleY;
+      if (this.hitBtn(this.btnLeft, tx, ty)) left = true;
+      if (this.hitBtn(this.btnRight, tx, ty)) right = true;
+      if (this.hitBtn(this.btnFire, tx, ty)) fire = true;
+    }
+    this.input.setVirtual(left, right, fire);
+  };
+
+  startBattle(playerType: ShipTypeName, enemyType: ShipTypeName | 'random', difficulty: DifficultyName) {
     const { width: w, height: h } = this.ctx.canvas;
-    let enemyType = this.pendingEnemyType;
-    if (enemyType === 'random') {
+    let resolvedEnemy = enemyType;
+    if (resolvedEnemy === 'random') {
       const types = Object.keys(SHIP_TYPES) as ShipTypeName[];
-      enemyType = types[Math.floor(Math.random() * types.length)];
+      resolvedEnemy = types[Math.floor(Math.random() * types.length)];
     }
 
-    this.player = new Ship(w * 0.3, h * 0.6, -Math.PI / 4, PLAYER_COLOR, this.pendingPlayerType);
-    this.enemy = new Ship(w * 0.7, h * 0.3, Math.PI * 0.75, ENEMY_COLOR, enemyType);
+    this.difficulty = difficulty;
+    this.player = new Ship(w * 0.3, h * 0.6, -Math.PI / 4, PLAYER_COLOR, playerType);
+    this.enemy = new Ship(w * 0.7, h * 0.3, Math.PI * 0.75, ENEMY_COLOR, resolvedEnemy);
     this.cannonballs = [];
     this.explosions = [];
     this.wind = new Wind();
+    this.gameOverFired = false;
     this.phase = 'battle';
   }
 
   private get over(): boolean {
-    return !this.player.alive || !this.enemy.alive;
+    return this.phase === 'battle' && (!this.player.alive || !this.enemy.alive);
   }
 
   start() {
     this.lastTime = performance.now();
     requestAnimationFrame(this.frame);
+  }
+
+  onResize(w: number, h: number) {
+    this.updateBtnRects(w, h);
+    this.waves.forEach((wave) => {
+      wave.x = Math.random() * w;
+      wave.y = Math.random() * h;
+    });
   }
 
   private frame = (now: number) => {
@@ -115,48 +156,13 @@ export class Game {
   };
 
   private update(dt: number) {
-    if (this.phase === 'select') {
-      for (const [code, type] of Object.entries(SELECT_KEYS)) {
-        if (this.input.wasPressed(code)) {
-          this.pendingPlayerType = type;
-          this.phase = 'enemySelect';
-          break;
-        }
-      }
-      return;
-    }
-
-    if (this.phase === 'enemySelect') {
-      for (const [code, type] of Object.entries(SELECT_KEYS)) {
-        if (this.input.wasPressed(code)) {
-          this.pendingEnemyType = type;
-          this.phase = 'difficultySelect';
-          break;
-        }
-      }
-      if (this.input.wasPressed('Digit4')) {
-        this.pendingEnemyType = 'random';
-        this.phase = 'difficultySelect';
-      }
-      return;
-    }
-
-    if (this.phase === 'difficultySelect') {
-      for (const [code, name] of Object.entries(DIFFICULTY_KEYS)) {
-        if (this.input.wasPressed(code)) {
-          this.difficulty = name;
-          this.startBattle();
-          break;
-        }
-      }
-      return;
-    }
+    if (this.phase === 'idle') return;
 
     const { width: w, height: h } = this.ctx.canvas;
 
-    if (this.over && this.input.wasPressed('KeyR')) {
-      this.phase = 'select';
-      return;
+    if (this.over && !this.gameOverFired) {
+      this.gameOverFired = true;
+      this.onGameOver?.(this.enemy.alive === false);
     }
 
     const diff = DIFFICULTIES[this.difficulty];
@@ -207,7 +213,6 @@ export class Game {
     this.explosions = this.explosions.filter((ex) => !ex.done);
   }
 
-  /** Fire a volley from whichever side of the shooter faces the target. */
   private fireBroadside(shooter: Ship, target: Ship, reload: number) {
     const bearing = Math.atan2(target.y - shooter.y, target.x - shooter.x);
     const side = Math.sin(bearing - shooter.heading) >= 0 ? 1 : -1;
@@ -234,18 +239,7 @@ export class Game {
 
   private render() {
     this.drawSea();
-    if (this.phase === 'select') {
-      this.drawShipPicker('Pirates: Naval Combat', 'Choose your ship', PLAYER_COLOR, false);
-      return;
-    }
-    if (this.phase === 'enemySelect') {
-      this.drawShipPicker('Choose the enemy ship', 'Who do you want to face?', ENEMY_COLOR, true);
-      return;
-    }
-    if (this.phase === 'difficultySelect') {
-      this.drawDifficultySelect();
-      return;
-    }
+    if (this.phase === 'idle') return;
 
     const ctx = this.ctx;
     for (const ball of this.cannonballs) ball.draw(ctx);
@@ -261,7 +255,7 @@ export class Game {
     );
     this.drawWindIndicator();
 
-    if (this.over) this.drawGameOver();
+    if (this.isTouchDevice && !this.over) this.drawTouchButtons();
   }
 
   private drawSea() {
@@ -280,93 +274,29 @@ export class Game {
     }
   }
 
-  private drawShipPicker(title: string, subtitle: string, hullColor: string, withRandom: boolean) {
+  private drawTouchButtons() {
     const ctx = this.ctx;
-    const { width: w, height: h } = ctx.canvas;
 
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 44px system-ui, sans-serif';
-    ctx.fillText(title, w / 2, h * 0.18);
-    ctx.font = '22px system-ui, sans-serif';
-    ctx.fillText(subtitle, w / 2, h * 0.18 + 44);
-
-    const types = Object.keys(SHIP_TYPES) as ShipTypeName[];
-    const cards = types.length + (withRandom ? 1 : 0);
-    const cardX = (i: number) => w / 2 + (i - (cards - 1) / 2) * 230;
-    const y = h * 0.5;
-
-    types.forEach((type, i) => {
-      const stats = SHIP_TYPES[type];
-      const x = cardX(i);
-
-      new Ship(x, y, -Math.PI / 2, hullColor, type).draw(ctx);
-
-      ctx.fillStyle = '#fff';
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 20px system-ui, sans-serif';
-      ctx.fillText(`${i + 1} — ${type[0].toUpperCase()}${type.slice(1)}`, x, y + 70);
-      ctx.font = '15px system-ui, sans-serif';
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-      ctx.fillText(`${stats.guns} guns · ${SPEED_LABELS[type]} · ${stats.maxHealth} hits to sink`, x, y + 94);
-    });
-
-    if (withRandom) {
-      const x = cardX(types.length);
-      ctx.strokeStyle = hullColor;
-      ctx.lineWidth = 3;
+    const drawBtn = (btn: BtnRect, label: string, active: boolean) => {
+      ctx.fillStyle = active ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.35)';
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(x, y, 26, 0, Math.PI * 2);
+      ctx.roundRect(btn.x, btn.y, btn.w, btn.h, 14);
+      ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = hullColor;
-      ctx.font = 'bold 34px system-ui, sans-serif';
-      ctx.fillText('?', x, y + 1);
 
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold 20px system-ui, sans-serif';
-      ctx.fillText(`${types.length + 1} — Random`, x, y + 70);
-      ctx.font = '15px system-ui, sans-serif';
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-      ctx.fillText('any of the three', x, y + 94);
-    }
+      ctx.font = 'bold 28px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, btn.x + btn.w / 2, btn.y + btn.h / 2);
+    };
 
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-    ctx.font = '17px system-ui, sans-serif';
-    if (withRandom) {
-      ctx.fillText('Press 1, 2, 3 to pick the enemy ship — or 4 to leave it to chance', w / 2, h * 0.82);
-    } else {
-      ctx.fillText('Press 1, 2 or 3 to choose your ship', w / 2, h * 0.82);
-      ctx.fillText('Press left or right arrows to control the ship - press spacebar to fire', w / 2, h * 0.82 + 28);
-    }
-  }
-
-  private drawDifficultySelect() {
-    const ctx = this.ctx;
-    const { width: w, height: h } = ctx.canvas;
-
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 44px system-ui, sans-serif';
-    ctx.fillText('Choose difficulty', w / 2, h * 0.18);
-    ctx.font = '22px system-ui, sans-serif';
-    ctx.fillText('How good is the enemy captain?', w / 2, h * 0.18 + 44);
-
-    const names = Object.keys(DIFFICULTIES) as DifficultyName[];
-    names.forEach((name, i) => {
-      const y = h * 0.42 + i * 80;
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 26px system-ui, sans-serif';
-      ctx.fillText(`${i + 1} — ${DIFFICULTIES[name].label}`, w / 2, y);
-      ctx.font = '16px system-ui, sans-serif';
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
-      ctx.fillText(DIFFICULTY_BLURBS[name], w / 2, y + 28);
-    });
-
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-    ctx.font = '17px system-ui, sans-serif';
-    ctx.fillText('Press 1, 2 or 3 to set sail', w / 2, h * 0.85);
+    const v = { left: this.input.isDown('ArrowLeft'), right: this.input.isDown('ArrowRight'), fire: this.input.isDown('Space') };
+    drawBtn(this.btnLeft, '←', v.left);
+    drawBtn(this.btnRight, '→', v.right);
+    drawBtn(this.btnFire, '🔥', v.fire);
   }
 
   private drawHealthRow(label: string, ship: Ship, row: number) {
@@ -434,21 +364,5 @@ export class Game {
     ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
     const pct = Math.round(this.wind.speedFactor(this.player.heading) * 100);
     ctx.fillText(`Sails ${pct}%`, cx, cy + r + 32);
-  }
-
-  private drawGameOver() {
-    const ctx = this.ctx;
-    const { width: w, height: h } = ctx.canvas;
-
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-    ctx.fillRect(0, 0, w, h);
-
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 42px system-ui, sans-serif';
-    ctx.fillText(this.enemy.alive ? 'Your ship was destroyed!' : 'Enemy ship destroyed!', w / 2, h / 2 - 20);
-    ctx.font = '20px system-ui, sans-serif';
-    ctx.fillText('Press R for a new battle', w / 2, h / 2 + 24);
   }
 }
