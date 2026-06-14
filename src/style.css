@@ -51,16 +51,36 @@ canvas {
   background: rgba(10, 30, 55, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 16px;
-  padding: 28px 32px 24px;
   max-width: 860px;
   width: calc(100% - 32px);
+  max-height: 90svh;
   color: #fff;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Scrollable card area */
+.modal-scroll {
+  overflow-y: auto;
+  padding: 28px 32px 12px;
+  flex: 1;
+  /* momentum scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Always-visible footer with the Set Sail button */
+.modal-footer {
+  padding: 12px 32px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 30, 55, 0.95);
+  flex-shrink: 0;
 }
 
 .modal h1 {
   margin: 0 0 20px;
-  font-size: clamp(22px, 4vw, 36px);
+  font-size: clamp(20px, 4vw, 36px);
   letter-spacing: 0.02em;
 }
 
@@ -70,12 +90,16 @@ canvas {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.5);
-  margin: 16px 0 8px;
+  margin: 14px 0 8px;
+}
+
+.section-label:first-of-type {
+  margin-top: 0;
 }
 
 .card-row {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   justify-content: center;
   flex-wrap: wrap;
 }
@@ -84,9 +108,9 @@ canvas {
   background: rgba(255, 255, 255, 0.07);
   border: 2px solid rgba(255, 255, 255, 0.18);
   border-radius: 10px;
-  padding: 10px 14px;
+  padding: 8px 12px;
   cursor: pointer;
-  min-width: 100px;
+  min-width: 90px;
   min-height: 44px;
   transition: background 0.12s, border-color 0.12s;
   color: #fff;
@@ -103,18 +127,17 @@ canvas {
 
 .card .card-name {
   font-weight: 700;
-  font-size: 15px;
-  margin-bottom: 3px;
+  font-size: 14px;
+  margin-bottom: 2px;
 }
 
 .card .card-stat {
-  font-size: 12px;
+  font-size: 11px;
   color: rgba(255, 255, 255, 0.7);
 }
 
 #set-sail {
-  margin-top: 22px;
-  padding: 14px 40px;
+  padding: 12px 40px;
   font-size: 18px;
   font-weight: 700;
   font-family: inherit;
@@ -123,7 +146,8 @@ canvas {
   border: none;
   border-radius: 10px;
   cursor: pointer;
-  min-height: 52px;
+  min-height: 48px;
+  width: 100%;
   transition: background 0.12s;
 }
 
@@ -132,9 +156,23 @@ canvas {
 }
 
 .hint {
-  margin-top: 12px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.45);
+  margin-top: 10px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Tighter vertical rhythm on short screens */
+@media (max-height: 650px) {
+  .modal-scroll {
+    padding-top: 16px;
+  }
+  .modal h1 {
+    margin-bottom: 12px;
+    font-size: 18px;
+  }
+  .section-label {
+    margin: 10px 0 6px;
+  }
 }
 
 /* ── Game-over panel ──────────────────────────────────────────────────────── */
