@@ -14,8 +14,8 @@ function makeSound(url: string): () => void {
   };
 }
 
-const playCannonFire = makeSound('/cannon.mp3');
-const playExplosion = makeSound('/explosion.mp3');
+const playCannonFire = makeSound('./cannon.mp3');
+const playExplosion = makeSound('./explosion.mp3');
 
 // ── Canvas setup ─────────────────────────────────────────────────────────────
 
